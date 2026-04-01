@@ -120,6 +120,7 @@ fn other_process() -> Result<(), Error> {
 #[cfg(feature = "std")]
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(target_os = "solaris", ignore)]
 fn other_process_pid() -> Result<(), Error> {
     use std::fs::read_to_string;
 
@@ -165,6 +166,7 @@ fn other_process_pid() -> Result<(), Error> {
 #[cfg(feature = "std")]
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(target_os = "solaris", ignore)]
 fn other_process_but_curr_reads() -> Result<(), Error> {
     use std::fs::read_to_string;
 

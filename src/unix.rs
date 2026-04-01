@@ -324,7 +324,33 @@ pub fn truncate(fd: FileDesc) -> Result<(), Error> {
     }
 }
 
+#[cfg(target_os = "solaris")]
+fn solaris_flock(lock_type: libc::c_short) -> libc::flock {
+    libc::flock {
+        l_type: lock_type,
+        l_whence: libc::SEEK_SET as libc::c_short,
+        l_start: 0,
+        l_len: 0,
+        l_sysid: 0,
+        l_pid: 0,
+        l_pad: [0; 4],
+    }
+}
+
 /// Tries to lock a file and blocks until it is possible to lock.
+#[cfg(target_os = "solaris")]
+pub fn lock(fd: FileDesc) -> Result<(), Error> {
+    let mut fl = solaris_flock(libc::F_WRLCK as libc::c_short);
+    let res = unsafe { libc::fcntl(fd, libc::F_SETLKW, &mut fl) };
+    if res >= 0 {
+        Ok(())
+    } else {
+        Err(Error::last_os_error())
+    }
+}
+
+/// Tries to lock a file and blocks until it is possible to lock.
+#[cfg(not(target_os = "solaris"))]
 pub fn lock(fd: FileDesc) -> Result<(), Error> {
     let res = unsafe { libc::flock(fd, libc::LOCK_EX) };
     if res >= 0 {
@@ -335,6 +361,24 @@ pub fn lock(fd: FileDesc) -> Result<(), Error> {
 }
 
 /// Tries to lock a file but returns as soon as possible if already locked.
+#[cfg(target_os = "solaris")]
+pub fn try_lock(fd: FileDesc) -> Result<bool, Error> {
+    let mut fl = solaris_flock(libc::F_WRLCK as libc::c_short);
+    let res = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut fl) };
+    if res >= 0 {
+        Ok(true)
+    } else {
+        let err = errno();
+        if err == libc::EACCES || err == libc::EAGAIN || err == libc::EINTR {
+            Ok(false)
+        } else {
+            Err(Error::from_raw_os_error(err as i32))
+        }
+    }
+}
+
+/// Tries to lock a file but returns as soon as possible if already locked.
+#[cfg(not(target_os = "solaris"))]
 pub fn try_lock(fd: FileDesc) -> Result<bool, Error> {
     let res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     if res >= 0 {
@@ -350,6 +394,19 @@ pub fn try_lock(fd: FileDesc) -> Result<bool, Error> {
 }
 
 /// Unlocks the file.
+#[cfg(target_os = "solaris")]
+pub fn unlock(fd: FileDesc) -> Result<(), Error> {
+    let mut fl = solaris_flock(libc::F_UNLCK as libc::c_short);
+    let res = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut fl) };
+    if res >= 0 {
+        Ok(())
+    } else {
+        Err(Error::last_os_error())
+    }
+}
+
+/// Unlocks the file.
+#[cfg(not(target_os = "solaris"))]
 pub fn unlock(fd: FileDesc) -> Result<(), Error> {
     let res = unsafe { libc::flock(fd, libc::LOCK_UN) };
     if res >= 0 {
